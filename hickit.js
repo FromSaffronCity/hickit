@@ -132,6 +132,19 @@ Interval.find_ovlp = function(a, st, en)
 var hic_sub_delim = '!';
 var _hic_re_cigar = /(\d+)([MIDSH])/g;
 
+function _hic_bs_skip_snp(aln_rev, a1, a2, c) {
+	if (!aln_rev) {
+		if (c == 'T' && ((a1 == 'C' && a2 == 'T') || (a1 == 'T' && a2 == 'C')))
+			return true;
+	} else {
+		if (c == 'A' && ((a1 == 'G' && a2 == 'A') || (a1 == 'A' && a2 == 'G')))
+			return true;
+		if (c == 'A' && ((a1 == 'C' && a2 == 'T') || (a1 == 'T' && a2 == 'C')))
+			return true;
+	}
+	return false;
+}
+
 function hic_vcf2tsv(args)
 {
 	var c, vcf_no_chr = false, inc_indel = false;
@@ -191,6 +204,7 @@ function _hic_resolve_frag(opt, a)
 		var m, clip = [0, 0], x = 0, y = 0;
 		var flag = t[1];
 		var rev = flag&16? true : false;
+		var aln_rev = (flag & 16) != 0;
 		while ((m = _hic_re_cigar.exec(t[5])) != null) {
 			var op = m[2], len = parseInt(m[1]);
 			if (op == 'M') {
@@ -235,8 +249,11 @@ function _hic_resolve_frag(opt, a)
 								var c = t[9][p];
 								var q = t[10].length == t[9].length? t[10].charCodeAt(p) - 33 : opt.min_baseq;
 								if (q >= opt.min_baseq) {
-									if (c == v[j][2]) phases.push(0);
-									else if (c == v[j][3]) phases.push(1);
+									var a1 = v[j][2], a2 = v[j][3];
+									if (opt.bisulfite && _hic_bs_skip_snp(aln_rev, a1, a2, c))
+										;
+									else if (c == a1) phases.push(0);
+									else if (c == a2) phases.push(1);
 									else if (opt.verbose >= 2)
 										warn('WARNING: a new allele ' + c + ' on read ' + qname + ' at position ' + t[2] + ':' + v[j][1] + ' (not ' + v[j][2] + '/' + v[j][3] + ')');
 								}
@@ -337,8 +354,8 @@ function _hic_resolve_frag(opt, a)
 
 function hic_sam2seg(args)
 {
-	var c, opt = { min_mapq:20, min_baseq:20, min_dist:500, fmt_pairs:false, no_qname:false, phased_only:false, phased_dist:false, verbose:3, fn_var:null };
-	while ((c = getopt(args, "q:V:d:pNv:DP")) != null) {
+	var c, opt = { min_mapq:20, min_baseq:20, min_dist:500, fmt_pairs:false, no_qname:false, phased_only:false, phased_dist:false, verbose:3, fn_var:null, bisulfite:false };
+	while ((c = getopt(args, "q:V:d:pNv:DPB")) != null) {
 		if (c == 'q') opt.min_mapq = parseInt(getopt.arg);
 		else if (c == 'V') opt.verbose = parseInt(getopt.arg);
 		else if (c == 'd') opt.min_dist = parseInt(getopt.arg);
@@ -347,6 +364,7 @@ function hic_sam2seg(args)
 		else if (c == 'D') opt.phased_only = opt.phased_dist = true;
 		else if (c == 'P') opt.phased_only = true;
 		else if (c == 'v') opt.fn_var = getopt.arg;
+		else if (c == 'B') opt.bisulfite = true;
 	}
 
 	if (args.length - getopt.ind == 0) {
@@ -358,6 +376,7 @@ function hic_sam2seg(args)
 		print("  -N         don't print fragment name");
 		print("  -v FILE    phased SNPs (typically vcf2tsv output)");
 		print("  -P         only output phase-informative segments (require -v)");
+		print("  -B         bisulfite mode (snM3C-seq data)");
 		return 1;
 	}
 
