@@ -252,8 +252,14 @@ function _hic_resolve_frag(opt, a)
 									var a1 = v[j][2], a2 = v[j][3];
 									if (opt.bisulfite && _hic_bs_skip_snp(aln_rev, a1, a2, c))
 										;
-									else if (c == a1) phases.push(0);
-									else if (c == a2) phases.push(1);
+									else if (c == a1) { 
+										phases.push(0); 
+										if (opt.fmt_snp) print(t[2], v[j][1], 0, q, qname); 
+									}
+									else if (c == a2) { 
+										phases.push(1); 
+										if (opt.fmt_snp) print(t[2], v[j][1], 1, q, qname); 
+									}
 									else if (opt.verbose >= 2)
 										warn('WARNING: a new allele ' + c + ' on read ' + qname + ' at position ' + t[2] + ':' + v[j][1] + ' (not ' + v[j][2] + '/' + v[j][3] + ')');
 								}
@@ -275,6 +281,7 @@ function _hic_resolve_frag(opt, a)
 		}
 		b.push([read_num, rev, qlen, qs, qe, t[2], rs, re, mapq, phase]);
 	}
+	if (opt.fmt_snp) return; // -F: per-SNP fragment export done in-loop; skip seg building
 	if (b.length < 2) return;
 
 	b.sort(function(x,y) { return x[0] != y[0]? x[0] - y[0] : x[3] - y[3] });
@@ -354,8 +361,10 @@ function _hic_resolve_frag(opt, a)
 
 function hic_sam2seg(args)
 {
-	var c, opt = { min_mapq:20, min_baseq:20, min_dist:500, fmt_pairs:false, no_qname:false, phased_only:false, phased_dist:false, verbose:3, fn_var:null, bisulfite:false };
-	while ((c = getopt(args, "q:V:d:pNv:DPB")) != null) {
+	var c, opt = { 
+		min_mapq:20, min_baseq:20, min_dist:500, fmt_pairs:false, no_qname:false, phased_only:false, phased_dist:false, verbose:3, fn_var:null, bisulfite:false, fmt_snp:false 
+	};
+	while ((c = getopt(args, "q:V:d:pNv:DPBF")) != null) {
 		if (c == 'q') opt.min_mapq = parseInt(getopt.arg);
 		else if (c == 'V') opt.verbose = parseInt(getopt.arg);
 		else if (c == 'd') opt.min_dist = parseInt(getopt.arg);
@@ -365,6 +374,7 @@ function hic_sam2seg(args)
 		else if (c == 'P') opt.phased_only = true;
 		else if (c == 'v') opt.fn_var = getopt.arg;
 		else if (c == 'B') opt.bisulfite = true;
+		else if (c == 'F') opt.fmt_snp = true;
 	}
 
 	if (args.length - getopt.ind == 0) {
@@ -377,6 +387,7 @@ function hic_sam2seg(args)
 		print("  -v FILE    phased SNPs (typically vcf2tsv output)");
 		print("  -P         only output phase-informative segments (require -v)");
 		print("  -B         bisulfite mode (snM3C-seq data)");
+		print("  -F         export per-SNP calls (chrom pos allele baseq qname) for HapCUT2 fragments");
 		return 1;
 	}
 
